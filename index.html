@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OnlineSilah2D</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div id="game-container">
+        <div id="login-screen" class="screen">
+            <h1>OnlineSilah2D</h1>
+            <div class="form">
+                <input type="text" id="username" placeholder="Kullanıcı Adı">
+                <input type="password" id="password" placeholder="Şifre">
+                <button id="login-btn">Giriş Yap</button>
+                <button id="register-btn">Kayıt Ol</button>
+            </div>
+        </div>
+        
+        <div id="lobby-screen" class="screen hidden">
+            <h1>Odalar</h1>
+            
+            <div class="player-info">
+                <div class="avatar">
+                    <img src="assets/players/player.png" alt="Avatar">
+                </div>
+                <div class="player-stats">
+                    <h3 id="player-username">...</h3>
+                    <p>Oyun sayısı: <span id="games-played">0</span></p>
+                    <p>Öldürme: <span id="kills">0</span></p>
+                </div>
+            </div>
+            
+            <div id="room-list"></div>
+            
+            <div class="room-controls">
+                <button id="create-room-btn">Oda Oluştur</button>
+                <button id="refresh-rooms-btn">Yenile</button>
+                <button id="logout-btn">Çıkış</button>
+            </div>
+        </div>
+        
+        <div id="game-screen" class="screen hidden">
+            <canvas id="game-canvas"></canvas>
+            <div id="game-ui">
+                <div id="player-health">Sağlık: 100</div>
+                <div id="player-armor">Zırh: 0</div>
+                <div id="current-weapon">Silah: Tabanca</div>
+                <div id="ammo-display">Mermi: 7/7</div>
+                <div id="players-list"></div>
+                <button id="leave-game-btn">Oyundan Çık</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/networking.js"></script>
+    <script src="js/weapons.js"></script>
+    <script src="js/chest.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>

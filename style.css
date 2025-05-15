@@ -1,0 +1,438 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Poppins', sans-serif;
+}
+
+:root {
+    --primary-color: #4361ee;
+    --primary-hover: #3a56d4;
+    --secondary-color: #f72585;
+    --background-dark: #121212;
+    --background-light: #1f1f1f;
+    --text-color: #ffffff;
+    --success-color: #4caf50;
+    --error-color: #f44336;
+    --info-color: #2196f3;
+}
+
+body {
+    background-color: var(--background-dark);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    color: var(--text-color);
+    overflow: hidden;
+}
+
+#game-container {
+    width: 90%;
+    max-width: 1200px;
+    height: 90vh;
+    background-color: var(--background-light);
+    border-radius: 12px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 15px 25px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+.screen {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background-color: var(--background-light);
+    transition: transform 0.5s ease, opacity 0.5s ease;
+}
+
+.hidden {
+    transform: translateY(20px);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    width: 350px;
+    gap: 15px;
+    padding: 30px;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+    transition: all 0.3s ease;
+}
+
+.form:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 20px rgba(0, 0, 0, 0.3);
+}
+
+input, button {
+    padding: 14px;
+    border-radius: 8px;
+    border: none;
+    font-size: 16px;
+    transition: all 0.3s ease;
+}
+
+input {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--text-color);
+    border: 2px solid transparent;
+}
+
+input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(67, 97, 238, 0.3);
+}
+
+button {
+    background-color: var(--primary-color);
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    box-shadow: 0 4px 10px rgba(67, 97, 238, 0.3);
+}
+
+button:hover {
+    background-color: var(--primary-hover);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(67, 97, 238, 0.4);
+}
+
+button:active {
+    transform: translateY(1px);
+}
+
+#game-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+}
+
+#game-ui {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 15px;
+    display: flex;
+    justify-content: space-between;
+}
+
+#player-health, #current-weapon, #ammo-display {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 8px 15px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    margin-right: 10px;
+}
+
+#players-list {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 10px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+    max-width: 200px;
+}
+
+#room-list {
+    width: 80%;
+    max-height: 60%;
+    overflow-y: auto;
+    margin: 25px 0;
+    background-color: rgba(0, 0, 0, 0.2);
+    border-radius: 12px;
+    padding: 15px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+}
+
+.room-item {
+    background: linear-gradient(45deg, rgba(30, 30, 30, 0.7), rgba(40, 40, 40, 0.7));
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.3s ease;
+    border-left: 4px solid var(--primary-color);
+}
+
+.room-item:hover {
+    background: linear-gradient(45deg, rgba(40, 40, 40, 0.8), rgba(50, 50, 50, 0.8));
+    transform: translateY(-3px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.room-item button {
+    background-color: var(--secondary-color);
+}
+
+.room-item button:hover {
+    background-color: #d01a6e;
+}
+
+.room-info h3 {
+    margin-bottom: 5px;
+    color: var(--text-color);
+}
+
+.room-info p {
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+.room-controls {
+    display: flex;
+    gap: 15px;
+    margin-top: 20px;
+}
+
+#leave-game-btn {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background-color: var(--error-color);
+    box-shadow: 0 4px 10px rgba(244, 67, 54, 0.3);
+}
+
+#leave-game-btn:hover {
+    background-color: #d32f2f;
+    box-shadow: 0 6px 12px rgba(244, 67, 54, 0.4);
+}
+
+.empty-room-message {
+    text-align: center;
+    padding: 40px 20px;
+    color: rgba(255, 255, 255, 0.6);
+    background-color: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    font-size: 18px;
+    border: 1px dashed rgba(255, 255, 255, 0.1);
+}
+
+#message-container {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    max-width: 300px;
+}
+
+.message {
+    padding: 12px 15px;
+    border-radius: 8px;
+    color: white;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+    animation: slideIn 0.3s ease forwards;
+    transition: opacity 0.5s ease;
+}
+
+.message-success {
+    background-color: var(--success-color);
+}
+
+.message-error {
+    background-color: var(--error-color);
+}
+
+.message-info {
+    background-color: var(--info-color);
+}
+
+.message-fadeout {
+    opacity: 0;
+}
+
+h1 {
+    margin-bottom: 25px;
+    font-size: 32px;
+    font-weight: 700;
+    text-align: center;
+    background: linear-gradient(to right, var(--primary-color), var(--secondary-color));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    text-fill-color: transparent;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pulse {
+    0% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.05);
+    }
+    100% {
+        transform: scale(1);
+    }
+}
+
+/* Responsive ayarlamalar */
+@media (max-width: 768px) {
+    .form {
+        width: 90%;
+    }
+    
+    #room-list {
+        width: 90%;
+    }
+}
+
+/* Player info paneli için stil */
+.player-info {
+    display: flex;
+    align-items: center;
+    background-color: rgba(255, 255, 255, 0.05);
+    padding: 15px;
+    border-radius: 12px;
+    margin-bottom: 20px;
+    width: 80%;
+    max-width: 500px;
+}
+
+.avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    overflow: hidden;
+    background-color: var(--primary-color);
+    margin-right: 15px;
+}
+
+.avatar img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.player-stats {
+    flex: 1;
+}
+
+.player-stats h3 {
+    margin-bottom: 5px;
+    color: var(--text-color);
+}
+
+.player-stats p {
+    margin: 3px 0;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 14px;
+}
+
+/* Oyuna katılma animasyonu */
+@keyframes joinGame {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+    100% { transform: scale(0); opacity: 0; }
+}
+
+.joining {
+    animation: joinGame 0.5s ease forwards;
+}
+
+/* Oda statusu için stiller */
+.room-status {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 8px;
+    font-size: 12px;
+    margin-top: 5px;
+}
+
+.room-status.active {
+    background-color: rgba(76, 175, 80, 0.2);
+    color: var(--success-color);
+}
+
+.room-status.inactive {
+    background-color: rgba(255, 152, 0, 0.2);
+    color: #FF9800;
+}
+
+/* Oda giriş butonları */
+.room-item button:disabled {
+    background-color: #666;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+/* Ölüm ekranı stilleri */
+.death-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(136, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.death-message {
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 2rem;
+    border-radius: 10px;
+    text-align: center;
+    color: white;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.5);
+}
+
+#respawn-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 12px 24px;
+    font-size: 16px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 20px;
+    transition: background-color 0.3s;
+}
+
+#respawn-btn:hover {
+    background-color: #d32f2f;
+}
+
+.hidden {
+    display: none;
+}
+
+/* Zırh göstergesi */
+#player-armor {
+    color: #03A9F4;
+    margin-left: 10px;
+}
