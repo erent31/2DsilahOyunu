@@ -1,89 +1,104 @@
 class Weapon {
-    constructor(name, type, damage, fireRate, maxAmmo, reloadTime) {
+    constructor(name, damage, fireRate, maxAmmo, totalAmmo, reloadTime, type, sprite = 'assets/items/default_weapon.png') {
         this.name = name;
-        this.type = type;
-        this.damage = damage;
-        this.fireRate = fireRate; // ms cinsinden
-        this.maxAmmo = maxAmmo;
+        this.damage = damage; 
+        this.fireRate = fireRate; 
+        this.maxAmmo = maxAmmo; 
+        this.totalAmmo = totalAmmo; 
         this.currentAmmo = maxAmmo;
-        this.totalAmmo = maxAmmo * 3;
-        this.reloadTime = reloadTime;
+        this.reloadTime = reloadTime; 
+        this.type = type; // Silah tipi (mermi türü, envanterde ayırt etmek için)
+        
         this.reloading = false;
-        this.projectileSpeed = 500; // Mermi hızını artır
+        this.reloadStartTime = 0;
+        this.lastShootTime = 0; // Son ateş etme zamanı
         
-        // Silah sprite'ı
         this.sprite = new Image();
-        
-        // Local storage'dan sprite'ı yükle (varsa)
-        const storedSprite = localStorage.getItem(`sprite_weapon_${type.toLowerCase()}`);
-        if (storedSprite) {
-            this.sprite.src = storedSprite;
-            console.log(`${type} sprite'ı local storage'dan yüklendi`);
-        } else {
-            // Yoksa varsayılan sprite'ı yükle
-            this.sprite.src = `assets/weapons/${type.toLowerCase()}.png`;
-            console.log(`${type} sprite'ı varsayılan dosyadan yükleniyor`);
+        this.sprite.src = sprite; // Silah görseli
+    }
+    
+    // Ateş etme kontrolü
+    canShoot() {
+        const currentTime = Date.now();
+        return !this.reloading && this.currentAmmo > 0 && (currentTime - this.lastShootTime > this.fireRate);
+    }
+
+    // Ateş et
+    shoot() {
+        if (this.canShoot()) {
+            this.currentAmmo--;
+            this.lastShootTime = Date.now();
+            // Mermi oluşturma mantığı game.js'de olacak
+            return true; // Ateş edildi
+        }
+        return false; // Ateş edilemedi
+    }
+
+    // Yeniden doldurmayı başlat
+    startReload() {
+        if (!this.reloading && this.currentAmmo < this.maxAmmo && this.totalAmmo > 0) {
+            this.reloading = true;
+            this.reloadStartTime = Date.now();
+            console.log(`${this.name} yeniden dolduruluyor...`);
         }
     }
-    
-    shoot(playerId, x, y, rotation) {
-        if (this.currentAmmo <= 0 || this.reloading) return [];
-        
-        // Mermi sayısını düşür
-        this.currentAmmo--;
-        
-        // Basit mermi oluştur
-        const offsetX = Math.cos(rotation) * 30; 
-        const offsetY = Math.sin(rotation) * 30;
-        
-        // Tek bir mermi döndür (shotgun dahil)
-        return [new Projectile(
-            playerId, 
-            x + offsetX, 
-            y + offsetY, 
-            rotation, 
-            600,  // sabit hız
-            this.damage
-        )];
+
+    // Yeniden doldurmayı güncelle (game loop'ta çağrılacak)
+    update(deltaTime) {
+        if (this.reloading) {
+            const currentTime = Date.now();
+            if (currentTime - this.reloadStartTime >= this.reloadTime) {
+                // Yeniden doldurma tamamlandı
+                this.reloading = false;
+                
+                const ammoNeeded = this.maxAmmo - this.currentAmmo;
+                const ammoToReload = Math.min(ammoNeeded, this.totalAmmo);
+                
+                this.currentAmmo += ammoToReload;
+                this.totalAmmo -= ammoToReload;
+                
+                console.log(`${this.name} yeniden dolduruldu. Mermi: ${this.currentAmmo}/${this.totalAmmo}`);
+            }
+        }
     }
-    
-    reload() {
-        if (this.reloading || this.currentAmmo === this.maxAmmo || this.totalAmmo <= 0) return;
-        
-        this.reloading = true;
-        
-        setTimeout(() => {
-            const ammoToAdd = Math.min(this.maxAmmo - this.currentAmmo, this.totalAmmo);
-            this.currentAmmo += ammoToAdd;
-            this.totalAmmo -= ammoToAdd;
-            this.reloading = false;
-        }, this.reloadTime);
+
+    // Silahı atmak için bilgi döndür
+    getDropInfo() {
+        return {
+            name: this.name,
+            type: 'weapon',
+            weaponType: this.type, // Silah tipi bilgisi
+            currentAmmo: this.currentAmmo,
+            totalAmmo: this.totalAmmo,
+            sprite: this.sprite.src
+        };
     }
 }
 
 class Pistol extends Weapon {
     constructor() {
-        super('Tabanca', 'Pistol', 20, 250, 7, 1000); // Ateş hızını artır (500->250ms)
-        this.projectileSpeed = 600;
+        super('Tabanca', 20, 200, 12, 60, 1500, 'pistol', 'assets/items/pistol.png'); 
     }
 }
 
 class Shotgun extends Weapon {
     constructor() {
-        super('Pompalı', 'Shotgun', 15, 500, 5, 1500); // Ateş hızını artır (800->500ms)
-        this.projectileSpeed = 500;
+        super('Pompalı', 15 * 8, 800, 8, 32, 2500, 'shotgun', 'assets/items/shotgun.png'); // Pompalı saçma mantığı, 8 mermi gibi düşünülebilir
     }
-    
-    shoot(playerId, x, y, rotation) {
-        // Simplify, just use parent method
-        return super.shoot(playerId, x, y, rotation);
+    // Pompalı için özel ateş etme metodu (birden fazla mermi atabilir)
+     shoot() {
+        if (this.canShoot()) {
+            this.currentAmmo--;
+            this.lastShootTime = Date.now();
+            return 8; // Pompalı 8 mermi (saçma) atar
+        }
+        return 0; // Ateş edilemedi
     }
 }
 
 class Rifle extends Weapon {
     constructor() {
-        super('Tüfek', 'Rifle', 30, 100, 25, 2000); // Ateş hızını artır (150->100ms)
-        this.projectileSpeed = 800;
+        super('Tüfek', 30, 150, 30, 90, 2000, 'rifle', 'assets/items/rifle.png');
     }
 }
 

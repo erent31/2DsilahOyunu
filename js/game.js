@@ -7,6 +7,7 @@ class Game {
         this.map = null;
         this.chests = [];
         this.projectiles = [];
+        this.items = [];
         this.lastTime = 0;
         this.networking = new Networking(this);
         this.auth = new Auth(this);
@@ -211,7 +212,7 @@ class Game {
     }
     
     handleKeyDown(e) {
-        if (!this.currentPlayer) return;
+        if (!this.currentPlayer || this.currentPlayer.isDead) return;
         
         switch(e.key) {
             case 'w':
@@ -235,11 +236,15 @@ class Game {
                 break;
             case 'e':
                 this.checkChestInteraction();
+                this.checkItemInteraction();
                 break;
             case '1':
             case '2':
             case '3':
                 this.currentPlayer.switchWeapon(parseInt(e.key) - 1);
+                break;
+            case 'q':
+                this.dropCurrentWeapon();
                 break;
         }
         
@@ -312,7 +317,7 @@ class Game {
     }
     
     checkChestInteraction() {
-        if (!this.currentPlayer) return;
+        if (!this.currentPlayer || this.currentPlayer.isDead) return;
         
         // Oyuncunun yakındaki sandıkları kontrol et
         for (const chest of this.chests) {
@@ -321,59 +326,146 @@ class Game {
             const distance = Math.sqrt(dx*dx + dy*dy);
             
             if (distance < 70 && !chest.opened) { // Etkileşim mesafesini artır
-                // Sandığı aç
+                // Sandığı aç ve loot al
                 const loot = chest.open(this.currentPlayer);
                 
-                if (loot) {
-                    // Sandık içeriğine göre işlem yap
-                    switch (loot.type) {
-                        case 'weapon':
-                            // Silahı envantere ekle
-                            const weaponIndex = this.currentPlayer.addWeapon(loot.item);
-                            
-                            // Otomatik olarak yeni silaha geç
-                            if (weaponIndex !== -1) {
-                                this.currentPlayer.currentWeaponIndex = weaponIndex;
-                                this.showNotification(`${loot.item.name} alındı ve seçildi!`, 'success');
-                            } else {
-                                this.showNotification(`${loot.item.name} buldun!`, 'success');
-                            }
-                            break;
-                        case 'armor':
-                            this.currentPlayer.addArmor(loot.amount);
-                            this.showNotification(`${loot.amount} zırh buldun!`, 'info');
-                            break;
-                        case 'health':
-                            this.currentPlayer.health = Math.min(100, this.currentPlayer.health + loot.amount);
-                            this.showNotification(`${loot.amount} can yenilendi!`, 'success');
-                            break;
-                        case 'ammo':
-                            const currentWeapon = this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex];
-                            currentWeapon.totalAmmo += loot.amount;
-                            this.showNotification(`${loot.amount} mermi buldun!`, 'info');
-                            break;
-                    }
-                    
-                    // Sandık açıldı bilgisini sunucuya gönder
-                    this.networking.sendPlayerUpdate();
+                if (loot && loot.type === 'item') {
+                    // Sandıktan Item çıktı, yere bırak
+                    const itemId = 'item_' + Date.now() + Math.random().toString(16).slice(2); // Basit eşsiz ID
+                    const droppedItem = new Item(itemId, chest.x + (Math.random()-0.5)*40, chest.y + (Math.random()-0.5)*40, loot.item); // Sandık etrafına rastgele bırak
+                    this.items.push(droppedItem); // Item'ı yere düşen eşyalar listesine ekle
+
+                    // Network üzerinden Item oluştu bilgisini gönder (simülasyon)
+                    this.networking.sendItemDrop(droppedItem);
+
+                    // Sandık açıldı bilgisini sunucuya gönder (simülasyon)
                     this.networking.openChest(chest.id);
+                } else if (loot) {
+                     // Gelecekte farklı loot tipleri olabilir
                 }
                 
-                break;
+                break; // Bir sandıkla etkileşim yeterli
             }
         }
+    }
+    
+    checkItemInteraction() {
+        if (!this.currentPlayer || this.currentPlayer.isDead) return;
+
+        for (let i = this.items.length - 1; i >= 0; i--) {
+            const item = this.items[i];
+            const dx = this.currentPlayer.x - item.x;
+            const dy = this.currentPlayer.y - item.y;
+            const distance = Math.sqrt(dx*dx + dy*dy);
+
+            // Oyuncuya yeterince yakınsa ve E tuşuna basılmışsa
+            if (distance < this.currentPlayer.radius + item.radius + 30) { // Aynı etkileşim mesafesi
+                // Eşyayı almaya çalış
+                const pickedUp = item.pickup(this.currentPlayer);
+                
+                if (pickedUp) {
+                    // Eşya başarıyla alındıysa listeden sil
+                    this.items.splice(i, 1);
+                    // Network üzerinden Item toplandı bilgisini gönder (simülasyon)
+                    this.networking.sendItemPickup(item.id);
+                    // UI güncellemesi otomatik update metodunda yapılacak
+                }
+                // Tek bir eşyayı almak yeterli olabilir, döngüden çık
+                return; 
+            }
+        }
+    }
+    
+    dropCurrentWeapon() {
+        if (!this.currentPlayer || this.currentPlayer.isDead) return;
+
+        const currentWeapon = this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex];
+        // Başlangıç tabancası veya tek kalan silah atılamaz (isteğe bağlı kural)
+        if (!currentWeapon || this.currentPlayer.weapons.length <= 1) { 
+            this.showNotification("Bu silahı atamazsın!", 'error');
+            return;
+        }
+
+        // Silahın bilgilerini alarak yere bırakılacak Item'ı oluştur
+        const dropInfo = currentWeapon.getDropInfo();
+        const itemId = 'item_' + Date.now() + Math.random().toString(16).slice(2); // Eşsiz ID
+        
+        // Oyuncunun biraz önüne Item bırak
+        const dropDistance = this.currentPlayer.radius + 30;
+        const dropX = this.currentPlayer.x + Math.cos(this.currentPlayer.rotation) * dropDistance + (Math.random()-0.5)*20; // Hafif rastgelelik
+        const dropY = this.currentPlayer.y + Math.sin(this.currentPlayer.rotation) * dropDistance + (Math.random()-0.5)*20;
+
+        const droppedItem = new Item(itemId, dropX, dropY, {
+            name: dropInfo.name,
+            type: 'weapon',
+            item: currentWeapon, // Silah objesinin kendisini sakla
+            sprite: dropInfo.sprite
+        });
+
+        this.items.push(droppedItem); // Item'ı yere düşen eşyalar listesine ekle
+        
+        // Oyuncunun envanterinden silahı sil
+        this.currentPlayer.weapons.splice(this.currentPlayer.currentWeaponIndex, 1);
+        // Silah indeksi kayabilir, 0. silaha geri dön (veya bir önceki silaha)
+        this.currentPlayer.currentWeaponIndex = Math.max(0, this.currentPlayer.currentWeaponIndex - 1);
+
+        this.showNotification(`${dropInfo.name} yere atıldı.`, 'info');
+        // Network üzerinden Item düştü bilgisini gönder (simülasyon)
+        this.networking.sendItemDrop(droppedItem);
+        this.networking.sendPlayerUpdate(); // Envanter değiştiği için oyuncu bilgisini güncelle
     }
     
     update(deltaTime) {
         try {
             // Delta zamanı sınırla
-            const cappedDelta = Math.min(deltaTime, 0.1);
-            
+            const cappedDelta = Math.min(deltaTime, 0.1); // Max 100ms
+
             // Oyuncuları güncelle
             for (const id in this.players) {
+                // Oyuncunun kendi update metodunu çağır (hareket, silah update vb.)
                 this.players[id].update(cappedDelta, this.map);
             }
             
+            // Sadece mevcut oyuncunun ateş etme durumunu kontrol et ve mermi oluştur
+            if (this.currentPlayer && this.currentPlayer.shooting && !this.currentPlayer.isDead) {
+                 const currentWeapon = this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex];
+                 if (currentWeapon && currentWeapon.canShoot()) {
+                    // Ateş etme başarılı, mermiyi oluştur
+                    currentWeapon.shoot(); // Silahın mermisini azalt
+
+                    // Mermi oluşturma (silah tipine göre farklı olabilir)
+                    // Şimdilik tüm mermiler aynı görünüyor, sonra sprite eklenecek
+                    const angle = this.currentPlayer.rotation;
+                    const playerSizeOffset = this.currentPlayer.radius + 10; // Merminin oyuncudan biraz önde başlaması için
+                    const muzzleOffset = { // Namlu çıkış pozisyonu (basit bir tahmin)
+                        x: Math.cos(angle) * playerSizeOffset,
+                        y: Math.sin(angle) * playerSizeOffset
+                    };
+                    
+                    // Mermi hızını silaha göre ayarla (örnek)
+                    let projectileSpeed = 800; 
+                    if (currentWeapon.type === 'shotgun') projectileSpeed = 600;
+                    if (currentWeapon.type === 'pistol') projectileSpeed = 700;
+
+                    const projectile = new Projectile(
+                        this.playerId, // Mermiyi atan oyuncunun ID'si
+                        this.currentPlayer.x + muzzleOffset.x,
+                        this.currentPlayer.y + muzzleOffset.y,
+                        angle,
+                        projectileSpeed,  // silaha göre hız
+                        currentWeapon.damage,
+                        currentWeapon.type // Mermi tipi (hasar hesaplaması veya görsel için)
+                    );
+                    
+                    // Yeni mermiyi listeye ekle
+                    this.projectiles.push(projectile);
+                    
+                    // Ağ üzerinden mermi atma bilgisini gönder (simülasyon)
+                    // Bu kısım gerçek networking server'da işlenmeli
+                    this.networking.sendProjectile(projectile);
+                 }
+            }
+
             // Mermileri güncelle
             for (let i = this.projectiles.length - 1; i >= 0; i--) {
                 const projectile = this.projectiles[i];
@@ -390,14 +482,18 @@ class Game {
                 // Engellere çarpma kontrolü
                 if (this.map.checkCollision(projectile.x, projectile.y)) {
                     this.projectiles.splice(i, 1);
+                    // Mermi çarpma efekti ekle (isteğe bağlı)
                     continue;
                 }
                 
                 // Oyunculara çarpma kontrolü
                 for (const id in this.players) {
-                    // Kendimizin attığı mermi bize çarpmasın
+                    // Kendimizin attığı mermi bize çarpmasın (veya takım arkadaşına)
                     if (id !== projectile.playerId) {
                         const player = this.players[id];
+                        // Eğer oyuncu ölmüşse veya mermi görünmezse çarpma kontrolü yapma
+                        if (player.isDead /* || projectile.isHidden */) continue; 
+
                         const dx = player.x - projectile.x;
                         const dy = player.y - projectile.y;
                         const distance = Math.sqrt(dx*dx + dy*dy);
@@ -408,87 +504,80 @@ class Game {
                             
                             // Zırh varsa hasarı azalt
                             if (player.armor > 0) {
-                                const absorbedDamage = Math.min(player.armor, damage * 0.5);
+                                const absorbedDamage = Math.min(player.armor, damage * 0.5); // Zırh %50 hasar emer
                                 damage -= absorbedDamage;
                                 player.armor -= absorbedDamage;
                             }
                             
-                            player.takeDamage(damage);
+                            // Kalan hasarı cana uygula
+                            if (damage > 0) {
+                                player.takeDamage(damage);
+                            }
                             
                             // Mermiyi sil
                             this.projectiles.splice(i, 1);
                             
-                            // Vuruş bilgisini gönder
-                            this.networking.sendPlayerUpdate();
+                            // Vuruş bilgisini gönder (Networking üzerinden)
+                            // Bu kısım gerçek networkte hasar hesaplaması ve senkronizasyonu için kullanılacak
+                            this.networking.sendPlayerUpdate(); 
                             
-                            // Hasar verdiğimizi bildir
-                            console.log(`${id} oyuncusuna ${damage} hasar verildi! Kalan can: ${player.health}`);
-                            
+                            // Hasar verdiğimizi bildir (UI veya console)
+                            console.log(`${id} oyuncusuna ${damage.toFixed(1)} hasar verildi! Kalan can: ${Math.ceil(player.health)}. Zırh: ${Math.ceil(player.armor)}`); // Debug için
+
                             // Eğer ölürse
                             if (player.health <= 0) {
                                 console.log(`${id} oyuncusu öldü!`);
                                 
-                                // Öldürme istatistiğini artır
+                                // Öldürme istatistiğini artır (eğer vuran bizsek)
                                 if (projectile.playerId === this.playerId) {
                                     const username = localStorage.getItem('currentUser');
                                     if (username) {
-                                        const playerStats = JSON.parse(localStorage.getItem(`stats_${username}`) || '{"gamesPlayed": 0, "kills": 0}');
+                                        const playerStats = JSON.parse(localStorage.getItem(`stats_${username}`) || '{"gamesPlayed": 0, "kills": 0, "deaths": 0}');
                                         playerStats.kills++;
                                         localStorage.setItem(`stats_${username}`, JSON.stringify(playerStats));
+                                        console.log(`${username} ${player.username}'i öldürdü! Kill: ${playerStats.kills}`);
                                     }
                                 }
                                 
                                 // Eğer ölen bizim oyuncumuzsa ölüm ekranını göster
                                 if (id === this.playerId) {
+                                    const username = localStorage.getItem('currentUser');
+                                     if (username) {
+                                        const playerStats = JSON.parse(localStorage.getItem(`stats_${username}`) || '{"gamesPlayed": 0, "kills": 0, "deaths": 0}');
+                                        playerStats.deaths++;
+                                        localStorage.setItem(`stats_${username}`, JSON.stringify(playerStats));
+                                        console.log(`${username} öldü! Ölüm: ${playerStats.deaths}`);
+                                    }
                                     this.playerDied();
+                                } else {
+                                     // Ölen başka bir oyuncuysa onu listeden veya haritadan kaldır (Network senkronizasyonu gerektirir)
+                                     // Şimdilik sadece isDead bayrağını set ediyoruz, render metodu gizleyecek
                                 }
                             }
                             
-                            break;
+                            break; // Oyuncu vurulduysa mermi durur
                         }
                     }
                 }
             }
             
-            // Sadece basit mermi oluşturma kullan (network olmadan)
-            if (this.currentPlayer && this.currentPlayer.shooting && !this.currentPlayer.isDead) {
-                const currentTime = Date.now();
-                const currentWeapon = this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex];
-                
-                if (currentWeapon && currentTime - this.currentPlayer.lastShootTime > currentWeapon.fireRate && currentWeapon.currentAmmo > 0) {
-                    // Basit mermi oluştur
-                    currentWeapon.currentAmmo--;
-                    
-                    // Tek bir mermi oluştur (pompalı silah için bir tane bile)
-                    const angle = this.currentPlayer.rotation;
-                    const offsetX = Math.cos(angle) * 30;
-                    const offsetY = Math.sin(angle) * 30;
-                    
-                    const projectile = new Projectile(
-                        this.playerId,
-                        this.currentPlayer.x + offsetX,
-                        this.currentPlayer.y + offsetY,
-                        angle,
-                        500,  // sabit hız
-                        currentWeapon.damage
-                    );
-                    
-                    // Sadece yerel olarak ekle
-                    this.projectiles.push(projectile);
-                    this.currentPlayer.lastShootTime = currentTime;
-                }
-            }
-            
             // UI güncellemesi
             this.updateUI();
+
+            // Debug bilgisini güncelle
+            this.updateDebugInfo();
+
         } catch (err) {
             console.error("Update hatası:", err);
+            // Hata durumunda oyunu durdur veya lobiye dön (Opsiyonel)
+            // this.leaveGame(); 
+            // alert("Oyun sırasında bir hata oluştu! Lütfen tekrar deneyin.");
         }
     }
     
     updateUI() {
         if (!this.currentPlayer) {
-            console.log("updateUI: currentPlayer yok");
+            // console.log("updateUI: currentPlayer yok"); // Debug çıktısını kaldır
             return;
         }
         
@@ -496,18 +585,27 @@ class Game {
         const healthEl = document.getElementById('player-health');
         const armorEl = document.getElementById('player-armor');
         const weaponEl = document.getElementById('current-weapon');
-        const ammoEl = document.getElementById('ammo-display');
+        const ammoEl = document.getElementById('ammo-display'); // Yeni mermi göstergesi
         const playersListEl = document.getElementById('players-list');
         
         // UI öğelerini güncelle
         healthEl.textContent = `Sağlık: ${Math.ceil(this.currentPlayer.health)}`;
         armorEl.textContent = `Zırh: ${Math.ceil(this.currentPlayer.armor)}`;
         
-        // Silah göstergesi
+        // Silah göstergesi ve mermi bilgisi
         if (this.currentPlayer.weapons && this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex]) {
             const currentWeapon = this.currentPlayer.weapons[this.currentPlayer.currentWeaponIndex];
             weaponEl.textContent = `Silah: ${currentWeapon.name}`;
-            ammoEl.textContent = `Mermi: ${currentWeapon.currentAmmo}/${currentWeapon.maxAmmo}`;
+            ammoEl.textContent = `Mermi: ${currentWeapon.currentAmmo}/${currentWeapon.totalAmmo}`; // Mermi bilgisini göster
+            
+            // Reload durumunu da burada gösterebiliriz (isteğe bağlı)
+            if (currentWeapon.reloading) {
+                 ammoEl.textContent += ' (Yeniden Dolduruluyor...)';
+            }
+            
+        } else {
+             weaponEl.textContent = `Silah: Yok`;
+             ammoEl.textContent = `Mermi: -/-`;
         }
         
         // Oyuncu listesi
@@ -515,10 +613,12 @@ class Game {
         for (const id in this.players) {
             const player = this.players[id];
             const playerEl = document.createElement('div');
-            playerEl.textContent = `${player.username}: ${player.health} HP`;
+            playerEl.textContent = `${player.username}: ${Math.ceil(player.health)} HP`; // Canı yuvarla
             
             if (id === this.playerId) {
-                playerEl.style.color = '#4CAF50';
+                playerEl.style.color = '#4CAF50'; // Kendimizi yeşil göster
+            } else {
+                 playerEl.style.color = '#FFA726'; // Diğer oyuncuları turuncu göster
             }
             
             playersListEl.appendChild(playerEl);
@@ -546,22 +646,33 @@ class Game {
             for (const chest of this.chests) {
                 try {
                     chest.render(this.ctx, this.currentPlayer);
-                } catch (e) {}
+                } catch (e) {console.error("Sandık çizim hatası:", e);}
+            }
+
+             // Yerdeki eşyaları çiz (oyunculardan önce çizilmeli)
+            for (const item of this.items) {
+                try {
+                    item.render(this.ctx, this.currentPlayer);
+                } catch (e) {console.error("Item çizim hatası:", e);}
             }
             
             // Mermileri çiz
             for (const projectile of this.projectiles) {
                 try {
                     projectile.render(this.ctx, this.currentPlayer);
-                } catch (e) {}
+                } catch (e) {console.error("Mermi çizim hatası:", e);}
             }
             
             // Oyuncuları çiz
             for (const id in this.players) {
                 try {
                     this.players[id].render(this.ctx, this.currentPlayer);
-                } catch (e) {}
+                } catch (e) {console.error("Oyuncu çizim hatası:", e);}
             }
+
+             // UI elemanları canvas üzerine çizilmez, HTML olarak varlar
+             // Debug bilgisi de HTML olarak var
+
         } catch (e) {
             console.error("Render genel hatası:", e);
         }
@@ -637,21 +748,25 @@ class Game {
         document.getElementById('death-screen').classList.add('hidden');
         
         // Oyuncuyu rastgele bir konumda yeniden oluştur
-        this.currentPlayer.x = 100 + Math.random() * 1800;
-        this.currentPlayer.y = 100 + Math.random() * 1800;
+        // Harita içinde güvenli bir nokta bulma eklenebilir
+        this.currentPlayer.x = 100 + Math.random() * (this.map.width - 200);
+        this.currentPlayer.y = 100 + Math.random() * (this.map.height - 200);
         this.currentPlayer.health = 100;
         this.currentPlayer.armor = 0;
-        this.currentPlayer.isDead = false;
+        this.currentPlayer.isDead = false; // Canlı hale getir
         
-        // Silahları sıfırla
+        // Silahları sıfırla (veya başlangıç silahlarını ver)
         this.currentPlayer.weapons = [
             new Pistol(),
             new Shotgun(),
             new Rifle()
         ];
         this.currentPlayer.currentWeaponIndex = 0;
+
+        // Mermileri temizle (simülasyon için)
+        this.projectiles = [];
         
-        // Güncellemeyi gönder
+        // Güncellemeyi gönder (Network üzerinden)
         this.networking.sendPlayerUpdate();
     }
     
@@ -720,6 +835,186 @@ class Game {
         setTimeout(() => {
             notification.remove();
         }, 3000);
+    }
+
+    // Networking sınıfından gelen güncellemeleri işleme
+    handleNetworkUpdate(update) {
+        // console.log("Network güncellemesi alındı:", update); // Debug için
+
+        // Oyuncu pozisyonları ve durumları
+        if (update.players) {
+            for (const playerId in update.players) {
+                const playerData = update.players[playerId];
+                if (this.players[playerId]) {
+                    // Var olan oyuncunun durumunu güncelle
+                    const player = this.players[playerId];
+                    
+                    // Sadece kendi oyuncumuz değilse pozisyonu güncelle
+                    if (playerId !== this.playerId) {
+                         // Yumuşak geçiş veya interpolasyon burada yapılabilir
+                        player.x = playerData.x;
+                        player.y = playerData.y;
+                        player.rotation = playerData.rotation;
+                        player.movement = playerData.movement; // Hareket durumu (animasyon için)
+                         player.shooting = playerData.shooting; // Ateş durumu (animasyon/görsel için)
+                         player.currentWeaponIndex = playerData.currentWeaponIndex; // Silah değişimi
+                    }
+
+                    // Can, zırh, isDead durumu gibi bilgileri her zaman güncelle
+                    player.health = playerData.health;
+                    player.armor = playerData.armor;
+                     player.isDead = playerData.isDead; // Ölüm durumu
+
+                    // Silah mermilerini ve reload durumunu güncelle (Networkten gelen data ile)
+                    if (playerData.weapons) {
+                         for(const updatedWeapon of playerData.weapons) {
+                             const existingWeapon = player.weapons.find(w => w.type === updatedWeapon.type);
+                             if (existingWeapon) {
+                                 existingWeapon.currentAmmo = updatedWeapon.currentAmmo;
+                                 existingWeapon.totalAmmo = updatedWeapon.totalAmmo;
+                                 existingWeapon.reloading = updatedWeapon.reloading; // Reload durumunu senkronize et
+                                 existingWeapon.reloadStartTime = updatedWeapon.reloadStartTime; // Reload zamanını da senkronize et
+                                 existingWeapon.lastShootTime = updatedWeapon.lastShootTime; // Son ateş zamanını senkronize et
+                             } else {
+                                  // Eğer oyuncuda o silah yoksa envanterine ekle (Network senkronizasyonu)
+                                   const weaponClass = { 'pistol': Pistol, 'shotgun': Shotgun, 'rifle': Rifle }[updatedWeapon.type];
+                                    if (weaponClass) {
+                                        const newWeapon = new weaponClass();
+                                        newWeapon.currentAmmo = updatedWeapon.currentAmmo;
+                                        newWeapon.totalAmmo = updatedWeapon.totalAmmo;
+                                        newWeapon.reloading = updatedWeapon.reloading;
+                                        newWeapon.reloadStartTime = updatedWeapon.reloadStartTime;
+                                        newWeapon.lastShootTime = updatedWeapon.lastShootTime;
+                                        player.addWeapon(newWeapon); // Oyuncuya silahı ekle
+                                    }
+                             }
+                         }
+                    }
+
+
+                } else {
+                    // Yeni oyuncu ekle (Sadece kendi oyuncumuz değilse)
+                     if (playerId !== this.playerId) {
+                        const newPlayer = new Player(
+                            playerId,
+                            playerData.username,
+                            playerData.x,
+                            playerData.y,
+                            playerData.skin
+                        );
+                         // Yeni oyuncunun silahlarını ve diğer durumlarını set et (Network mesajında gelmeli)
+                         if (playerData.weapons) {
+                             newPlayer.weapons = playerData.weapons.map(wData => {
+                                // weaponData'dan tam Weapon objesi oluştur
+                                 const weaponClass = { 'pistol': Pistol, 'shotgun': Shotgun, 'rifle': Rifle }[wData.type];
+                                 if (weaponClass) {
+                                     const weapon = new weaponClass();
+                                     weapon.currentAmmo = wData.currentAmmo;
+                                     weapon.totalAmmo = wData.totalAmmo;
+                                     weapon.reloading = wData.reloading;
+                                     weapon.reloadStartTime = wData.reloadStartTime; // Reload zamanını da senkronize et
+                                     weapon.lastShootTime = wData.lastShootTime; // Son ateş zamanını senkronize et
+                                     return weapon;
+                                 }
+                                 return null; // Bilinmeyen silah tipi
+                             }).filter(w => w !== null);
+                             newPlayer.currentWeaponIndex = playerData.currentWeaponIndex;
+                         }
+                         newPlayer.health = playerData.health;
+                         newPlayer.armor = playerData.armor;
+                         newPlayer.isDead = playerData.isDead;
+
+                         this.players[playerId] = newPlayer; // Oyuncuyu ekle
+                         console.log(`Yeni oyuncu bağlandı: ${playerData.username} (${playerId})`);
+                     }
+                }
+            }
+            
+            // Ayrılan oyuncuları listeden kaldır
+            for (const playerId in this.players) {
+                if (!update.players[playerId] && playerId !== this.playerId) {
+                    console.log(`Oyuncu ayrıldı: ${this.players[playerId].username} (${playerId})`);
+                    delete this.players[playerId];
+                }
+            }
+        }
+
+        // Item güncellemeleri (Yere düşen ve toplanan eşyalar) - Networkten gelen bilgi ile state'i senkronize et
+        if (update.items) {
+             // Yere yeni düşen eşyaları ekle
+             for(const itemData of update.items.dropped || []) {
+                 // Eğer bu item zaten bizde yoksa ekle (aynı itemın tekrar eklenmesini önle)
+                 if (!this.items.find(item => item.id === itemData.id)) {
+                     // Item data'dan tam Item objesi oluştur
+                      let itemContent = itemData.itemData;
+                     // Eğer item bir silahsa, tam Weapon objesi oluştur
+                     if (itemContent.type === 'weapon' && itemContent.weaponData) {
+                          const weaponClass = { 'pistol': Pistol, 'shotgun': Shotgun, 'rifle': Rifle }[itemContent.weaponData.type];
+                         if (weaponClass) {
+                              const weapon = new weaponClass();
+                             // Silahın güncel mermisi ve toplam mermisi (atıldığında kalan)
+                             weapon.currentAmmo = itemContent.weaponData.currentAmmo;
+                             weapon.totalAmmo = itemContent.weaponData.totalAmmo;
+                             itemContent.item = weapon; // Item data'ya tam silah objesini ekle
+                         }
+                     }
+                     
+                      const item = new Item(itemData.id, itemData.x, itemData.y, itemContent);
+                     this.items.push(item);
+                     console.log(`Network: Yeni eşya düştü: ${itemContent.name} (${itemData.id})`);
+                 }
+             }
+
+             // Toplanan eşyaları listeden sil
+             for(const itemId of update.items.pickedUp || []) {
+                 const index = this.items.findIndex(item => item.id === itemId);
+                 if (index !== -1) {
+                     console.log(`Network: Eşya toplandı: ${this.items[index].itemData.name} (${itemId})`);
+                     this.items.splice(index, 1);
+                 }
+             }
+        }
+
+         // Sandık güncellemeleri (Açılan sandıklar) - Networkten gelen bilgi ile state'i senkronize et
+        if (update.chests) {
+             for(const chestId of update.chests.opened || []) {
+                 const chest = this.chests.find(c => c.id === chestId);
+                 if (chest && !chest.opened) {
+                     chest.opened = true;
+                     chest.sprite.src = 'assets/chests/chest_opened.png';
+                      console.log(`Network: Sandık açıldı: ${chest.id}`);
+                 }
+             }
+        }
+
+        // Mermi güncellemeleri (Network üzerinden gelen mermileri ekle ve senkronize et)
+        if (update.projectiles) {
+             // Ağdan gelen mermileri ekle
+             for(const projData of update.projectiles) {
+                 // Eğer bu mermi zaten bizde yoksa ekle (aynı merminin tekrar eklenmesini önle)
+                 if (!this.projectiles.find(p => p.id === projData.id)) {
+                      const projectile = new Projectile(
+                         projData.playerId,
+                         projData.x,
+                         projData.y,
+                         projData.angle,
+                         projData.speed,
+                         projData.damage,
+                         projData.type, // Mermi tipi
+                         projData.id // Merminin ağ üzerindeki kimliği
+                     );
+                     this.projectiles.push(projectile);
+                     console.log(`Network: Yeni mermi görüldü (${projData.id})`);
+                 }
+             }
+
+             // Ağda olmayan mermileri yerel listeden sil (senkronizasyon)
+             // Bu daha gelişmiş bir network senkronizasyonu gerektirir.
+             // Şimdilik sadece gelenleri ekliyoruz. Temizlik daha sonra eklenebilir.
+        }
+
+
+        // Diğer network güncellemeleri buraya eklenecek (oda listesi vb.)
     }
 }
 

@@ -103,34 +103,71 @@ class Chest {
         if (this.opened) return null;
         
         this.opened = true;
-        
-        // Sandık tipine göre farklı içerikler ver
+        // Görsel olarak sandığı açıldı gibi göster
+        this.sprite.src = 'assets/chests/chest_opened.png'; // Açılmış sandık görseli (varsa)
+
+        let loot = null;
+
+        // Sandık tipine göre loot belirle
         switch (this.type) {
             case 'weapon':
-                // Rastgele silah ver
-                const weapons = [new Pistol(), new Shotgun(), new Rifle()];
-                const randomWeapon = weapons[Math.floor(Math.random() * weapons.length)];
-                return { type: 'weapon', item: randomWeapon };
+                // Rastgele bir silah seç (Pistol, Shotgun, Rifle)
+                const weaponTypes = ['pistol', 'shotgun', 'rifle'];
+                const randomWeaponType = weaponTypes[Math.floor(Math.random() * weaponTypes.length)];
                 
+                let weaponInstance;
+                // Silah türüne göre instance oluştur
+                switch (randomWeaponType) {
+                    case 'pistol':
+                        weaponInstance = new Pistol();
+                        break;
+                    case 'shotgun':
+                        weaponInstance = new Shotgun();
+                        break;
+                    case 'rifle':
+                         weaponInstance = new Rifle();
+                        break;
+                }
+                
+                // Silahı doğrudan envantere eklemek yerine yere Item olarak düşüreceğiz
+                // loot = { type: 'weapon', item: weaponInstance }; // Bu kısmı kaldırıyoruz
+                
+                // Yerine yere Item düşürme bilgisini döndür
+                return { type: 'item', item: weaponInstance }; // Item olarak düşecek silah
+
             case 'armor':
-                // 25-50 arası zırh ver
-                const armorAmount = 25 + Math.floor(Math.random() * 25);
-                return { type: 'armor', amount: armorAmount };
-                
+                const armorAmount = Math.floor(Math.random() * 30) + 20; // 20-50 arası zırh
+                // loot = { type: 'armor', amount: armorAmount }; // Bu kısmı kaldırıyoruz
+                 return { type: 'item', item: { name: `${armorAmount} Zırh`, type: 'armor', amount: armorAmount, sprite: 'assets/items/armor.png' } };
+
             case 'health':
-                // 25-50 arası can ver
-                const healthAmount = 25 + Math.floor(Math.random() * 25);
-                return { type: 'health', amount: healthAmount };
-                
+                const healthAmount = Math.floor(Math.random() * 20) + 10; // 10-30 arası can
+                // loot = { type: 'health', amount: healthAmount }; // Bu kısmı kaldırıyoruz
+                 return { type: 'item', item: { name: `${healthAmount} Can`, type: 'health', amount: healthAmount, sprite: 'assets/items/health.png' } };
+
             case 'special':
-                // Süper silah (yüksek hasar)
-                const superWeapon = new Rifle();
-                superWeapon.damage = 35;
-                superWeapon.name = "Süper Tüfek";
-                return { type: 'weapon', item: superWeapon };
-                
-            default:
-                return { type: 'ammo', amount: 30 };
+                 // Özel bir eşya düşür (örneğin, daha fazla mermi veya özel bir silah)
+                 // Şimdilik sadece çok mermi düşsün
+                 const bigAmmoAmount = Math.floor(Math.random() * 100) + 50; // 50-150 arası mermi
+                 const randomAmmoType = ['pistol', 'shotgun', 'rifle'][Math.floor(Math.random() * 3)];
+                 return { type: 'item', item: { name: `${bigAmmoAmount} ${randomAmmoType.toUpperCase()} Mermisi`, type: 'ammo', ammoType: randomAmmoType, amount: bigAmmoAmount, sprite: `assets/items/${randomAmmoType}_ammo.png` } };
+
+            default: // Normal sandık (rastgele mermi veya küçük can/zırh)
+                 const randomLootType = ['ammo', 'health', 'armor'][Math.floor(Math.random() * 3)];
+                 
+                 if(randomLootType === 'ammo') {
+                    const ammoAmount = Math.floor(Math.random() * 30) + 10; // 10-40 arası mermi
+                    const randomAmmoType = ['pistol', 'shotgun', 'rifle'][Math.floor(Math.random() * 3)];
+                    return { type: 'item', item: { name: `${ammoAmount} ${randomAmmoType.toUpperCase()} Mermisi`, type: 'ammo', ammoType: randomAmmoType, amount: ammoAmount, sprite: `assets/items/${randomAmmoType}_ammo.png` } };
+                 } else if (randomLootType === 'health') {
+                    const healthAmount = Math.floor(Math.random() * 15) + 5; // 5-20 arası can
+                     return { type: 'item', item: { name: `${healthAmount} Can`, type: 'health', amount: healthAmount, sprite: 'assets/items/health.png' } };
+                 } else { // armor
+                    const armorAmount = Math.floor(Math.random() * 15) + 5; // 5-20 arası zırh
+                     return { type: 'item', item: { name: `${armorAmount} Zırh`, type: 'armor', amount: armorAmount, sprite: 'assets/items/armor.png' } };
+                 }
         }
+        
+        return null; // Bir şey çıkmazsa null dön
     }
 } 

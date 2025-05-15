@@ -12,13 +12,19 @@
 <body>
     <div id="game-container">
         <div id="login-screen" class="screen">
-            <h1>OnlineSilah2D</h1>
-            <div class="form">
-                <input type="text" id="username" placeholder="Kullanıcı Adı">
-                <input type="password" id="password" placeholder="Şifre">
-                <button id="login-btn">Giriş Yap</button>
-                <button id="register-btn">Kayıt Ol</button>
-            </div>
+            <h2>Giriş Yap</h2>
+            <input type="text" id="login-username" placeholder="Kullanıcı Adı">
+            <input type="password" id="login-password" placeholder="Şifre">
+            <button id="login-btn">Giriş Yap</button>
+            <button id="show-register">Hesabın yok mu? Kayıt Ol</button>
+        </div>
+        
+        <div id="register-screen" class="screen hidden">
+            <h2>Kayıt Ol</h2>
+            <input type="text" id="register-username" placeholder="Kullanıcı Adı">
+            <input type="password" id="register-password" placeholder="Şifre">
+            <button id="register-btn">Kayıt Ol</button>
+            <button id="show-login">Zaten hesabın var mı? Giriş Yap</button>
         </div>
         
         <div id="lobby-screen" class="screen hidden">
@@ -46,13 +52,25 @@
         
         <div id="game-screen" class="screen hidden">
             <canvas id="game-canvas"></canvas>
-            <div id="game-ui">
-                <div id="player-health">Sağlık: 100</div>
-                <div id="player-armor">Zırh: 0</div>
-                <div id="current-weapon">Silah: Tabanca</div>
-                <div id="ammo-display">Mermi: 7/7</div>
-                <div id="players-list"></div>
-                <button id="leave-game-btn">Oyundan Çık</button>
+            <div class="ui-container">
+                <div id="player-info">
+                    <span id="player-health">Sağlık: 100</span>
+                    <span id="player-armor">Zırh: 0</span>
+                </div>
+                <div id="weapon-info">
+                    <span id="current-weapon">Silah: Yok</span>
+                    <span id="ammo-display">Mermi: 0/0</span>
+                </div>
+                <div id="players-list">
+                    <!-- Oyuncu listesi buraya gelecek -->
+                </div>
+            </div>
+            <div id="death-screen" class="death-overlay hidden">
+                <div class="death-message">
+                    <h2>ÖLDÜNÜZ!</h2>
+                    <p>Yeniden doğmak için butona tıklayın</p>
+                    <button id="respawn-btn">YENİDEN DOĞ</button>
+                </div>
             </div>
         </div>
     </div>

@@ -53,8 +53,14 @@ class Player {
         // Eğer ölmüşse hareket etme
         if (this.isDead) return;
         
-        // Delta zamanı sınırla (çok büyük delta zamanı atlamaya neden olabilir)
+        // Delta zamanı sınırla
         const cappedDelta = Math.min(deltaTime, 0.05); // Max 50ms
+
+        // Silahı güncelle (reload süresini takip et)
+        if (this.weapons[this.currentWeaponIndex]) {
+            this.weapons[this.currentWeaponIndex].update(Date.now() - (this.lastUpdateTime || Date.now())); // Delta time ms cinsinden ver
+        }
+        this.lastUpdateTime = Date.now();
 
         // Hareket vektörünü hesapla
         let moveX = 0;
@@ -68,13 +74,33 @@ class Player {
         // Hareket durumunu güncelle
         this.isMoving = (moveX !== 0 || moveY !== 0);
         
-        // Hareket yoksa işlem yapma
+        // Hareket yoksa işlem yapma (animasyon hariç)
         if (!this.isMoving) {
-            this.animationFrame = 0;
-            this.animationTime = 0;
-            return;
+            // Animasyon güncelleme
+            if (this.isMoving) { // isMoving zaten false, bu blok çalışmayacak
+                this.animationTime += cappedDelta;
+                if (this.animationTime >= this.frameDuration) {
+                    this.animationFrame = (this.animationFrame + 1) % 4;
+                    this.animationTime = 0;
+                }
+            } else {
+                // Hareket etmiyorsa animasyonu sıfırla
+                this.animationFrame = 0;
+                this.animationTime = 0;
+            }
+            
+            // Ateş etme (Hareket etmiyor olsa da ateş edebilir)
+            if (this.shooting && this.weapons[this.currentWeaponIndex]) {
+                const currentWeapon = this.weapons[this.currentWeaponIndex];
+                if (currentWeapon.canShoot()) {
+                    // Mermi oluşturma game.js'de yapılacak
+                    // currentWeapon.shoot() burada çağrılmayacak, game.js'de ateş etme mantığına dahil edilecek
+                    // this.lastShootTime = Date.now(); // Bu da game.js'ye taşınacak
+                }
+            }
+            return; // Hareket yoksa buradan çık
         }
-        
+
         // Vektörü normalize et
         const length = Math.sqrt(moveX * moveX + moveY * moveY);
         if (length > 0) {
@@ -107,22 +133,19 @@ class Player {
         this.y = Math.max(0, Math.min(map.height, this.y));
         
         // Animasyon güncelleme
-        if (this.isMoving) {
-            this.animationTime += cappedDelta;
-            if (this.animationTime >= this.frameDuration) {
-                this.animationFrame = (this.animationFrame + 1) % 4;
-                this.animationTime = 0;
-            }
+        this.animationTime += cappedDelta;
+        if (this.animationTime >= this.frameDuration) {
+            this.animationFrame = (this.animationFrame + 1) % 4;
+            this.animationTime = 0;
         }
         
-        // Ateş etme
-        if (this.shooting) {
+        // Ateş etme (Hareket ederken de ateş edebilir)
+        if (this.shooting && this.weapons[this.currentWeaponIndex]) {
             const currentWeapon = this.weapons[this.currentWeaponIndex];
-            const currentTime = Date.now();
-            
-            if (currentTime - this.lastShootTime > currentWeapon.fireRate && currentWeapon.currentAmmo > 0) {
-                currentWeapon.currentAmmo--;
-                this.lastShootTime = currentTime;
+             if (currentWeapon.canShoot()) {
+                // Mermi oluşturma game.js'de yapılacak
+                // currentWeapon.shoot() burada çağrılmayacak
+                // this.lastShootTime = Date.now(); // Bu da game.js'ye taşınacak
             }
         }
     }
@@ -229,7 +252,9 @@ class Player {
     }
     
     reload() {
-        this.weapons[this.currentWeaponIndex].reload();
+         if (this.weapons[this.currentWeaponIndex]) {
+             this.weapons[this.currentWeaponIndex].startReload();
+         }
     }
     
     takeDamage(damage) {
@@ -256,5 +281,22 @@ class Player {
     // Zırh ekleme metodu
     addArmor(amount) {
         this.armor = Math.min(this.maxArmor, this.armor + amount);
+    }
+
+    // Mermi ekleme metodu (silaha özel mermi türüne göre)
+    addAmmo(ammoType, amount) {
+        for (const weapon of this.weapons) {
+            if (weapon.type === ammoType) {
+                weapon.totalAmmo += amount;
+                // Eğer o an o silahı tutuyorsa ve reload yapmıyorsa otomatik reload başlatabiliriz (isteğe bağlı)
+                // if (weapon === this.weapons[this.currentWeaponIndex] && !weapon.reloading) {
+                //     weapon.startReload();
+                // }
+                return true; // Mermi eklendi
+            }
+        }
+        // Eğer elde o tipte silah yoksa mermiyi ekleme (şimdilik)
+        console.warn(`Silah tipine (${ammoType}) uygun envanterde silah yok.`);
+        return false; // Mermi eklenemedi
     }
 } 
